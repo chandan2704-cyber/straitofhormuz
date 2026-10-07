@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Strait Escape — Mobile Battle</title>
+<style>
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#02101d;font-family:Arial,sans-serif;color:#fff;touch-action:none}
+#game{position:relative;width:100vw;height:100dvh;overflow:hidden;background:#04213a}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+#hud{position:absolute;top:max(8px,env(safe-area-inset-top));left:8px;right:8px;z-index:5;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.panel{background:rgba(1,10,25,.72);border:1px solid #3fd8ff66;border-radius:10px;padding:7px 9px;backdrop-filter:blur(5px)}
+.stat{width:min(180px,35vw);margin:2px 0}.label{font-size:9px;display:flex;justify-content:space-between}.bar{height:6px;background:#18303e;border-radius:6px;overflow:hidden}.fill{height:100%;width:100%}
+#oxygenFill{background:#26d9ff}#fuelFill{background:#ffd044}#hullFill{background:#ff5268}#missileFill{background:#aa82ff}
+#info{font-size:10px;line-height:1.55;text-align:right}
+#message{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);z-index:7;background:#0009;border:1px solid #62ddff66;padding:7px 12px;border-radius:20px;font-size:11px;white-space:nowrap}
+#targetBox{position:absolute;width:70px;height:55px;border:2px solid #ff405b;z-index:4;display:none;pointer-events:none}
+#targetBox:before{content:"LOCK";position:absolute;top:-18px;color:#ff6577;font-size:9px;font-weight:bold}
+#warning{position:absolute;top:85px;left:50%;transform:translateX(-50%);z-index:8;color:#ff5268;font-weight:bold;font-size:13px;opacity:0}
+#controls{position:absolute;left:0;right:0;bottom:max(8px,env(safe-area-inset-bottom));height:78px;z-index:10;pointer-events:none}
+.pad{position:absolute;left:12px;bottom:4px;width:120px;height:70px;pointer-events:auto}
+.pad button,.action{position:absolute;border:1px solid #7deaff88;background:#09293dcc;color:#dffaff;border-radius:14px;font-weight:bold;box-shadow:0 3px 12px #0008}
+.pad button{width:38px;height:32px;font-size:18px}
+#up{left:41px;top:0}#down{left:41px;bottom:0}#left{left:0;top:19px}#right{right:0;top:19px}
+.actions{position:absolute;right:10px;bottom:4px;width:180px;height:70px;pointer-events:auto}
+.action{width:78px;height:58px}.fire{right:0;bottom:0;background:#6c1722cc}.lock{right:88px;bottom:0}
+.action small{display:block;font-size:9px;margin-top:3px}
+#start,#end{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,#07507855,#000d)}
+.modal{width:min(560px,92vw);padding:28px;background:#031321ee;border:1px solid #62ddff55;border-radius:18px;text-align:center;box-shadow:0 20px 80px #000}
+h1{margin:0 0 8px;color:#72e9ff;letter-spacing:4px;font-size:clamp(28px,7vw,45px)}h2{color:#72e9ff}
+.desc{color:#a9c5d0;line-height:1.55;font-size:14px}
+button.main{margin-top:18px;padding:12px 24px;border:0;border-radius:9px;background:#62e4ff;color:#01202b;font-weight:bold}
+.hidden{display:none!important}
+#pause{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#0008;font-size:36px;letter-spacing:6px}
+</style>
+</head>
+<body>
+<div id="game">
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="panel">
+    <div class="stat"><div class="label"><span>OXYGEN</span><span id="ot">100%</span></div><div class="bar"><div id="oxygenFill" class="fill"></div></div></div>
+    <div class="stat"><div class="label"><span>FUEL</span><span id="ft">100%</span></div><div class="bar"><div id="fuelFill" class="fill"></div></div></div>
+    <div class="stat"><div class="label"><span>HULL</span><span id="ht">100%</span></div><div class="bar"><div id="hullFill" class="fill"></div></div></div>
+    <div class="stat"><div class="label"><span>MISSILES</span><span id="mt">20</span></div><div class="bar"><div id="missileFill" class="fill"></div></div></div>
+  </div>
+  <div id="info" class="panel">🇺🇸 USS FREEDOM<br>DEPTH <b id="dt">50m</b><br>SPEED <b id="st">0</b><br>DIST <b id="dist">0m</b><br>ENEMIES <b id="et">0</b><br>SCORE <b id="score">0</b></div>
+</div>
+<div id="message">Lock enemies and fire missiles.</div><div id="warning">⚠ INCOMING TORPEDO ⚠</div><div id="targetBox"></div>
+<div id="controls">
+  <div class="pad"><button id="up">▲</button><button id="left">◀</button><button id="right">▶</button><button id="down">▼</button></div>
+  <div class="actions"><button class="action lock" id="lock">LOCK<small>nearest</small></button><button class="action fire" id="fire">🚀 FIRE<small>missile</small></button></div>
+</div>
+<div id="pause" class="hidden">PAUSED</div>
+<div id="start"><div class="modal"><h1>STRAIT ESCAPE</h1><div class="desc">Command the 🇺🇸 USS FREEDOM. Destroy hostile submarines, collect missile crates and reach the extraction zone.<br><br><b>Desktop:</b> W/S/A/D, E, Space, P, Q<br><b>Mobile:</b> use the on-screen controls.</div><button class="main" id="startBtn">START MISSION</button></div></div>
+<div id="end" class="hidden"><div class="modal"><h2 id="endTitle"></h2><div id="endDesc"></div><button class="main" id="restart">PLAY AGAIN</button></div></div>
+</div>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');let W,H,D=1;
+function resize(){W=innerWidth;H=innerHeight;D=Math.min(devicePixelRatio,2);c.width=W*D;c.height=H*D;x.setTransform(D,0,0,D,0,0)}addEventListener('resize',resize);resize();
+const keys={};let running=false,paused=false,over=false,world=0,depth=50,oxygen=100,fuel=100,hull=100,missiles=20,score=0,speed=0,target=null,cool=0,sonar=0;
+const p={x:W*.48,y:H*.52,a:0}, enemies=[], shots=[], rockets=[], blasts=[], crates=[], mines=[], fish=[];
+const countries=[['🇷🇺','RUSSIA','#e64b5d'],['🇨🇳','CHINA','#ff334d'],['🇯🇵','JAPAN','#e64d62'],['🇫🇷','FRANCE','#5182ff'],['🇬🇧','UK','#6b83ff']];
+function R(a,b){return Math.random()*(b-a)+a}
+function worldGen(){
+ enemies.length=0;crates.length=0;mines.length=0;fish.length=0;
+ for(let xx=1000;xx<17500;xx+=R(900,1500)){let q=countries[Math.floor(Math.random()*countries.length)];enemies.push({x:xx,y:R(140,Math.max(200,H-170)),flag:q[0],country:q[1],color:q[2],hp:100,alive:true,detect:0,shot:R(2,5),phase:R(0,7)})}
+ for(let xx=900;xx<17500;xx+=R(800,1200))crates.push({x:xx,y:R(160,Math.max(250,H-160)),type:Math.random()<.65?'missile':Math.random()<.5?'oxygen':'fuel',taken:false,phase:R(0,7)});
+ for(let xx=1000;xx<17500;xx+=R(550,950))mines.push({x:xx,y:R(150,Math.max(250,H-140)),r:R(15,25),gone:false});
+ for(let i=0;i<80;i++)fish.push({x:R(0,18000),y:R(100,Math.max(300,H-100)),s:R(2,6),v:R(.2,1.2)});
+}
+function reset(){running=true;paused=over=false;world=0;depth=50;oxygen=fuel=hull=100;missiles=20;score=0;speed=0;target=null;cool=0;shots.length=rockets.length=blasts.length=0;p.x=W*.48;p.y=H*.52;worldGen();document.getElementById('start').classList.add('hidden');document.getElementById('end').classList.add('hidden')}
+function lock(){let best=null,bd=1e9;for(const e of enemies){if(!e.alive)continue;let sx=e.x-world+p.x;let d=Math.hypot(sx-p.x,e.y-p.y);if(sx>0&&d<bd){bd=d;best=e}}target=best;msg(best?best.flag+' '+best.country+' LOCKED':'NO ENEMY IN RANGE')}
+function fire(){if(!running||paused||over||cool>0)return;if(missiles<=0){msg('NO MISSILES — FIND A SUPPLY CRATE');return}missiles--;cool=.55;let tx=p.x+500,ty=p.y;if(target&&target.alive){tx=target.x-world+p.x;ty=target.y}let a=Math.atan2(ty-p.y,tx-p.x);rockets.push({x:p.x+35,y:p.y,vx:Math.cos(a)*8,vy:Math.sin(a)*8,t:4,target});msg('🚀 MISSILE LAUNCHED')}
+function msg(s){document.getElementById('message').textContent=s}
+function blast(X,Y,big=true){blasts.push({x:X,y:Y,t:0,max:big?1:.55})}
+function enemyFire(e){let sx=e.x-world+p.x,a=Math.atan2(p.y-e.y,p.x-sx);shots.push({x:sx,y:e.y,vx:Math.cos(a)*4.5,vy:Math.sin(a)*4.5,t:5});document.getElementById('warning').style.opacity=1;setTimeout(()=>document.getElementById('warning').style.opacity=0,500)}
+function update(dt){
+ if(!running||paused||over)return;cool-=dt;sonar-=dt;
+ let want=keys.shift?3.2:1.7;if(fuel<=0)want=.1;speed+=(want-speed)*.04;world+=speed*60*dt;
+ if(keys.w||keys.up){p.y-=2.7;depth+=.55}if(keys.s||keys.down){p.y+=2.7;depth-=.55}p.y=Math.max(100,Math.min(H-105,p.y));depth=Math.max(5,Math.min(120,depth));
+ if(keys.a||keys.left)p.a-=.025;if(keys.d||keys.right)p.a+=.025;
+ fuel-=speed*.003*dt*60;oxygen-=.0022*dt*60;if(depth>90)oxygen-=.0015*dt*60;if(depth<15)oxygen+=.012*dt*60;oxygen=Math.max(0,Math.min(100,oxygen));fuel=Math.max(0,fuel);
+ for(const e of enemies){if(!e.alive)continue;let sx=e.x-world+p.x,dd=Math.hypot(sx-p.x,e.y-p.y);e.y+=Math.sin(performance.now()*.001+e.phase)*.08;e.shot-=dt;if(dd<300){e.detect+=dt;if(e.detect>1.2&&e.shot<=0){enemyFire(e);e.shot=R(3,6)}}else e.detect=Math.max(0,e.detect-dt)}
+ for(let i=rockets.length-1;i>=0;i--){let m=rockets[i];m.t-=dt;if(m.target&&m.target.alive){let tx=m.target.x-world+p.x,a=Math.atan2(m.target.y-m.y,tx-m.x);m.vx+=Math.cos(a)*.18;m.vy+=Math.sin(a)*.18;let l=Math.hypot(m.vx,m.vy);m.vx=m.vx/l*8;m.vy=m.vy/l*8}m.x+=m.vx;m.y+=m.vy;for(const e of enemies){if(!e.alive)continue;let d=Math.hypot(m.x-(e.x-world+p.x),m.y-e.y);if(d<38){e.hp-=55;blast(m.x,m.y,e.hp<=0);rockets.splice(i,1);if(e.hp<=0){e.alive=false;score+=500;msg('💥 '+e.flag+' '+e.country+' DESTROYED!');if(target===e)target=null}break}}if(m.t<=0)rockets.splice(i,1)}
+ for(let i=shots.length-1;i>=0;i--){let s=shots[i];s.x+=s.vx;s.y+=s.vy;s.t-=dt;if(Math.hypot(s.x-p.x,s.y-p.y)<30){hull-=18;blast(p.x,p.y,false);shots.splice(i,1);msg('💥 TORPEDO IMPACT!')}else if(s.t<=0)shots.splice(i,1)}
+ for(const m of mines){if(m.gone)continue;let sx=m.x-world+p.x;if(Math.hypot(sx-p.x,m.y-p.y)<m.r+25){m.gone=true;hull-=20;blast(p.x,p.y);msg('💥 MINE HIT!')}}
+ for(const q of crates){if(q.taken)continue;let sx=q.x-world+p.x;if(Math.hypot(sx-p.x,q.y-p.y)<42){q.taken=true;if(q.type==='missile'){missiles=Math.min(40,missiles+8);msg('🚀 MISSILE CRATE +8')}else if(q.type==='oxygen'){oxygen=Math.min(100,oxygen+30);msg('💙 OXYGEN +30%')}else{fuel=Math.min(100,fuel+30);msg('🟡 FUEL +30%')}score+=100}}
+ for(let i=blasts.length-1;i>=0;i--){blasts[i].t+=dt;if(blasts[i].t>blasts[i].max)blasts.splice(i,1)}
+ if(depth<7)hull-=.004*dt*60;if(depth>117)hull-=.006*dt*60;hull=Math.max(0,hull);
+ if(world>=18000)finish(true);else if(oxygen<=0)finish(false,'Oxygen depleted.');else if(hull<=0)finish(false,'USS FREEDOM was destroyed.');else if(fuel<=0&&speed<.2)finish(false,'Fuel exhausted.');
+ updateHud();updateTarget();
+}
+function finish(win,reason){if(over)return;over=true;score+=win?Math.round(oxygen*10+fuel*5+hull*10):0;document.getElementById('endTitle').textContent=win?'🇺🇸 MISSION COMPLETE':'MISSION FAILED';document.getElementById('endDesc').innerHTML=(win?'USS FREEDOM crossed the Strait safely.':'<b>'+reason+'</b>')+'<br><br>Score: <b>'+Math.round(score)+'</b><br>Missiles: <b>'+missiles+'</b>';document.getElementById('end').classList.remove('hidden')}
+function updateTarget(){let b=document.getElementById('targetBox');if(!target||!target.alive){b.style.display='none';return}let sx=target.x-world+p.x;b.style.display=(sx>0&&sx<W)?'block':'none';b.style.left=(sx-35)+'px';b.style.top=(target.y-27)+'px'}
+function updateHud(){let alive=enemies.filter(e=>e.alive).length;for(const [id,val] of [['oxygenFill',oxygen],['fuelFill',fuel],['hullFill',hull]])document.getElementById(id).style.width=val+'%';document.getElementById('missileFill').style.width=Math.min(100,missiles/40*100)+'%';document.getElementById('ot').textContent=Math.round(oxygen)+'%';document.getElementById('ft').textContent=Math.round(fuel)+'%';document.getElementById('ht').textContent=Math.round(hull)+'%';document.getElementById('mt').textContent=missiles;document.getElementById('dt').textContent=Math.round(depth)+'m';document.getElementById('st').textContent=Math.round(speed*20);document.getElementById('dist').textContent=Math.round(Math.min(18000,world))+'m';document.getElementById('et').textContent=alive;document.getElementById('score').textContent=Math.round(score)}
+function draw(t){
+ let g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#073f72');g.addColorStop(.5,'#075f78');g.addColorStop(1,'#031521');x.fillStyle=g;x.fillRect(0,0,W,H);
+ x.globalAlpha=.12;for(let i=0;i<8;i++){x.fillStyle=i%2?'#7df6ff':'#fff';x.beginPath();x.moveTo(i*180,60);x.lineTo(i*180+100,H);x.lineTo(i*180+240,H);x.lineTo(i*180+60,60);x.fill()}x.globalAlpha=1;
+ for(const f of fish){let sx=((f.x-world*.5)%W+W)%W,y=f.y+Math.sin(t*.002+f.x)*4;x.strokeStyle='#83eaff88';x.beginPath();x.moveTo(sx,y);x.lineTo(sx-f.s*2,y);x.stroke()}
+ x.fillStyle='#071b22';x.beginPath();x.moveTo(0,H-80);for(let xx=0;xx<=W;xx+=20)x.lineTo(xx,H-80+Math.sin(xx*.02)*8);x.lineTo(W,H);x.lineTo(0,H);x.fill();
+ for(const q of crates){if(q.taken)continue;let sx=q.x-world+p.x;if(sx<-30||sx>W+30)continue;let y=q.y+Math.sin(t*.003+q.x)*5;x.fillStyle=q.type==='missile'?'#aa82ff':q.type==='oxygen'?'#28e4ff':'#ffd044';x.shadowBlur=18;x.shadowColor=x.fillStyle;x.beginPath();x.arc(sx,y,13,0,7);x.fill();x.shadowBlur=0;x.fillStyle='#001';x.font='bold 10px Arial';x.textAlign='center';x.fillText(q.type==='missile'?'M':q.type==='oxygen'?'O':'F',sx,y+3)}
+ for(const m of mines){if(m.gone)continue;let sx=m.x-world+p.x;if(sx<-50||sx>W+50)continue;x.strokeStyle='#ff5168';x.lineWidth=3;x.beginPath();x.arc(sx,m.y,m.r,0,7);x.stroke();for(let i=0;i<8;i++){let a=i*Math.PI/4;x.beginPath();x.moveTo(sx,m.y);x.lineTo(sx+Math.cos(a)*(m.r+10),m.y+Math.sin(a)*(m.r+10));x.stroke()}}
+ for(const e of enemies){if(!e.alive)continue;let sx=e.x-world+p.x;if(sx<-100||sx>W+100)continue;x.save();x.translate(sx,e.y);x.shadowBlur=18;x.shadowColor=e.color;x.fillStyle='#40515a';x.beginPath();x.ellipse(0,0,45,15,0,0,7);x.fill();x.shadowBlur=0;x.fillStyle=e.color;x.fillRect(-40,5,80,6);x.fillStyle='#637b82';x.fillRect(-10,-24,20,10);x.fillStyle='#72edff';for(let i=0;i<3;i++){x.beginPath();x.arc(-10+i*10,-4,3,0,7);x.fill()}x.font='20px Arial';x.textAlign='center';x.fillText(e.flag,0,-43);x.fillStyle='#17242b';x.fillRect(-40,-62,80,5);x.fillStyle=e.hp>50?'#5dff73':'#ff4b58';x.fillRect(-40,-62,80*e.hp/100,5);x.restore()}
+ for(const s of shots){x.save();x.translate(s.x,s.y);x.rotate(Math.atan2(s.vy,s.vx));x.fillStyle='#ff5360';x.fillRect(-9,-3,18,6);x.fillStyle='#ffd044';x.beginPath();x.arc(-12,0,5,0,7);x.fill();x.restore()}
+ for(const m of rockets){x.save();x.translate(m.x,m.y);x.rotate(Math.atan2(m.vy,m.vx));x.fillStyle='#ff9c28';x.beginPath();x.moveTo(-10,0);x.lineTo(-28,-5);x.lineTo(-22,0);x.lineTo(-28,5);x.fill();x.fillStyle='#eaf2f5';x.fillRect(-9,-3,22,6);x.restore()}
+ for(const b of blasts){let p=b.t/b.max,r=(b.big?75:40)*p;x.globalAlpha=1-p;let gg=x.createRadialGradient(b.x,b.y,2,b.x,b.y,r);gg.addColorStop(0,'#fff');gg.addColorStop(.2,'#ffe64c');gg.addColorStop(.55,'#ff7020');gg.addColorStop(1,'#ff200000');x.fillStyle=gg;x.beginPath();x.arc(b.x,b.y,r,0,7);x.fill()}x.globalAlpha=1;
+ /* player */
+ x.save();x.translate(p.x,p.y);x.rotate(p.a);x.shadowBlur=25;x.shadowColor='#2bdfff';x.fillStyle='#185a7b';x.beginPath();x.moveTo(-35,0);x.lineTo(-58,-17);x.lineTo(-58,17);x.closePath();x.fill();let pg=x.createLinearGradient(-40,-15,40,15);pg.addColorStop(0,'#153c68');pg.addColorStop(.5,'#39c8e9');pg.addColorStop(1,'#124f7c');x.fillStyle=pg;x.beginPath();x.ellipse(0,0,43,17,0,0,7);x.fill();x.shadowBlur=0;x.fillStyle='#fff';x.fillRect(-5,-28,25,12);x.fillStyle='#315bd4';x.fillRect(-5,-28,9,7);x.fillStyle='#e53b4d';x.fillRect(-5,-14,25,3);x.fillStyle='#2c8aa4';x.fillRect(-9,-24,18,10);x.fillStyle='#031b29';for(let i=0;i<3;i++){x.beginPath();x.arc(-8+i*11,-5,4,0,7);x.fill()}x.font='21px Arial';x.textAlign='center';x.fillText('🇺🇸',3,-47);x.restore();
+ let ex=18000-world+p.x;if(ex>0&&ex<W){x.fillStyle='#55ff91';x.fillRect(ex,70,4,H-140);x.font='bold 15px Arial';x.fillText('EXTRACTION',ex-55,95)}
+}
+function loop(now){let dt=Math.min(.05,(now-(loop.last||now))/1000);loop.last=now;update(dt);draw(now);requestAnimationFrame(loop)}requestAnimationFrame(loop);
+function keyBind(id,key){let b=document.getElementById(id);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true});b.addEventListener('pointerup',e=>{e.preventDefault();keys[key]=false});b.addEventListener('pointercancel',()=>keys[key]=false);b.addEventListener('pointerleave',()=>keys[key]=false)}
+keyBind('up','up');keyBind('down','down');keyBind('left','left');keyBind('right','right');
+document.getElementById('fire').addEventListener('pointerdown',e=>{e.preventDefault();fire()});
+document.getElementById('lock').addEventListener('pointerdown',e=>{e.preventDefault();lock()});
+addEventListener('keydown',e=>{keys[e.code.replace('Arrow','').toLowerCase()]=true;if(e.code==='Space')fire();if(e.code==='KeyE')lock();if(e.code==='KeyQ'&&sonar<=0){sonar=5;msg('📡 SONAR PULSE — ENEMIES REVEALED')}if(e.code==='KeyP'){paused=!paused;document.getElementById('pause').classList.toggle('hidden',!paused)}});addEventListener('keyup',e=>keys[e.code.replace('Arrow','').toLowerCase()]=false);
+document.getElementById('startBtn').onclick=()=>reset();document.getElementById('restart').onclick=()=>reset();worldGen();draw(0);updateHud();
+</script>
+</body>
+</html>
